@@ -5,7 +5,7 @@ complaints (with a photo if needed) and can see the full status history. Admins 
 complaints, set priority, update status, and post notices to the whole society. Residents get
 an email whenever their complaint status changes or an important notice goes up.
 
-Live app: _add the deployed link here once it's up_
+Live app: https://society-maintenance-tracker-bay.vercel.app/
 
 Demo accounts (only work after you run the seed script, see below):
 - Admin - admin@maple.test / password123
