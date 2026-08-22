@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  RESIDENT
+  ADMIN
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(RESIDENT)
+  flatNumber   String?
+  createdAt    DateTime @default(now())
+
+  complaints   Complaint[]
+  notices      Notice[]
+  historyEntries ComplaintHistory[]
+}
+
+model Complaint {
+  id           String          @id @default(cuid())
+  title        String
+  category     String
+  description  String
+  photoUrl     String?
+  status       ComplaintStatus @default(OPEN)
+  priority     Priority        @default(LOW)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  resolvedAt   DateTime?
+
+  resident     User            @relation(fields: [residentId], references: [id])
+  residentId   String
+
+  history      ComplaintHistory[]
+
+  @@index([status])
+  @@index([category])
+  @@index([residentId])
+}
+
+model ComplaintHistory {
+  id           String    @id @default(cuid())
+  complaint    Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  complaintId  String
+  status       ComplaintStatus
+  note         String?
+  actor        User      @relation(fields: [actorId], references: [id])
+  actorId      String
+  createdAt    DateTime  @default(now())
+
+  @@index([complaintId])
+}
+
+model Notice {
+  id         String   @id @default(cuid())
+  title      String
+  body       String
+  important  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  postedBy   User     @relation(fields: [postedById], references: [id])
+  postedById String
+}
+
+model Settings {
+  id                String @id @default("singleton")
+  overdueThresholdDays Int  @default(5)
+}
