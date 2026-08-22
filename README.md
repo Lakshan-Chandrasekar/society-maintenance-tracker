@@ -1,175 +1,159 @@
 # Society Maintenance Tracker
 
-A maintenance-complaint platform for apartment societies. Residents raise complaints with
-photos and track them to resolution. Admins triage by priority, see overdue items surfaced
-automatically, post notices, and get a live dashboard. Residents are emailed on every status
-change and on important notices.
+A simple system for apartment societies to manage maintenance complaints. Residents log
+complaints (with a photo if needed) and can see the full status history. Admins go through
+complaints, set priority, update status, and post notices to the whole society. Residents get
+an email whenever their complaint status changes or an important notice goes up.
 
-Live demo: _add your deployed URL here after deploying_
+Live app: _add the deployed link here once it's up_
 
-Demo logins (after running the seed script):
-- Admin: `admin@maple.test` / `password123`
-- Resident: `resident@maple.test` / `password123`
+Demo accounts (only work after you run the seed script, see below):
+- Admin - admin@maple.test / password123
+- Resident - resident@maple.test / password123
 
----
+## Stack used
 
-## Tech stack
+- Next.js 14 (App Router) with TypeScript for both frontend and API
+- PostgreSQL, accessed through Prisma
+- Auth done manually - email/password, JWT kept in an httpOnly cookie. No Auth0/Clerk, just
+  bcrypt + jsonwebtoken
+- Tailwind for styling
+- Recharts for the two charts on the admin dashboard
+- Nodemailer for sending emails over plain SMTP
 
-- **Frontend + Backend:** Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **Database:** PostgreSQL via Prisma ORM
-- **Auth:** Custom email/password auth, JWT stored in an httpOnly cookie (no third-party auth
-  service needed)
-- **Charts:** Recharts (dashboard)
-- **Email:** Nodemailer over SMTP (works with a free Gmail App Password, or any SMTP provider)
+## Setting it up locally
 
----
-
-## 1. Local setup
-
-### Prerequisites
-- Node.js 18+ and npm
-- A Postgres database. The fastest free option is [Neon](https://neon.tech) — sign up, create
-  a project, and copy the connection string it gives you.
-
-### Steps
+You need Node 18+ and a Postgres database. If you don't already have one, the quickest way is
+[Neon](https://neon.tech) - free tier, gives you a connection string in about a minute.
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Copy the environment template and fill in real values
 cp .env.example .env
-# then edit .env — at minimum set DATABASE_URL and JWT_SECRET
+```
 
-# 3. Push the Prisma schema to your database (creates all tables)
-npx prisma db push
+Open `.env` and fill in at least `DATABASE_URL` and `JWT_SECRET`. Everything in there is
+explained with a comment, but roughly:
 
-# 4. (Optional but recommended) seed a demo admin + resident + sample data
-npm run seed
+- `DATABASE_URL` - your Postgres connection string
+- `JWT_SECRET` - any random string, used to sign the login cookie
+- `ADMIN_INVITE_CODE` - whoever knows this code can register as an admin from the sign-up page
+- `OVERDUE_THRESHOLD_DAYS` - how many days a complaint can sit open before it gets flagged
+  overdue (defaults to 5)
+- `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` - for sending emails
 
-# 5. Run the dev server
+Once the env file is ready:
+
+```bash
+npx prisma db push      # creates all the tables in your database
+npm run seed             # optional, adds a demo admin + resident + one sample complaint
 npm run dev
 ```
 
-Visit `http://localhost:3000`. Register a resident account from `/register`, or use the admin
-invite code from your `.env` to register an admin account.
+App runs at `http://localhost:3000`. Sign up as a resident normally, or use the admin invite
+code to sign up as admin.
 
-### Email setup (optional for local testing)
-If `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` aren't set, the app still works normally — it just
-logs "would have sent email" to the console instead of actually sending one. To send real
-emails with a free Gmail account:
-1. Turn on 2-Step Verification on the Gmail account.
-2. Create an "App Password" (Google Account → Security → App passwords).
-3. Set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER` to the Gmail address, and
-   `SMTP_PASS` to the 16-character app password.
+A note on email - if you don't set the SMTP variables, the app doesn't break, it just prints
+"would have sent email to ..." in the terminal instead of actually sending anything. That's
+fine for testing the whole flow without setting up a mailbox. When you do want real emails,
+the easiest route is a Gmail account with an App Password (turn on 2-Step Verification first,
+then Google Account > Security > App Passwords).
 
----
-
-## 2. Environment variables
-
-See `.env.example` for the full list with comments. Summary:
-
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Postgres connection string |
-| `JWT_SECRET` | Signs the session cookie — any long random string |
-| `ADMIN_INVITE_CODE` | Required in the register form to create an ADMIN account |
-| `OVERDUE_THRESHOLD_DAYS` | Days a complaint can stay open before it's flagged overdue (default 5) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Outgoing email |
-
----
-
-## 3. Database schema
+## How the database is laid out
 
 ```
 User
-  id, name, email (unique), passwordHash, role (RESIDENT | ADMIN), flatNumber, createdAt
-  -> complaints (as resident), historyEntries (as actor), notices (as poster)
+  id, name, email, passwordHash, role (RESIDENT/ADMIN), flatNumber, createdAt
 
 Complaint
-  id, title, category, description, photoUrl, status (OPEN | IN_PROGRESS | RESOLVED),
-  priority (LOW | MEDIUM | HIGH), createdAt, updatedAt, resolvedAt
-  -> residentId (FK -> User)
-  -> history (1-to-many ComplaintHistory)
+  id, title, category, description, photoUrl, status, priority,
+  createdAt, updatedAt, resolvedAt, residentId (-> User)
 
 ComplaintHistory
-  id, complaintId (FK), status, note, actorId (FK -> User), createdAt
-  -- one row per status change, in order, forming a full audit trail
+  id, complaintId (-> Complaint), status, note, actorId (-> User), createdAt
+  one row gets added every time a complaint's status changes, so this table
+  is basically the full timeline you see on the complaint detail page
 
 Notice
-  id, title, body, important (boolean), createdAt, postedById (FK -> User)
+  id, title, body, important, createdAt, postedById (-> User)
 
 Settings
-  id, overdueThresholdDays  -- reserved for a future admin-configurable threshold UI;
-                                currently the threshold is read from OVERDUE_THRESHOLD_DAYS
+  id, overdueThresholdDays
+  (table exists for a future admin screen to change the threshold from the UI;
+  right now the app just reads it from the env variable instead)
 ```
 
-Full definitions are in [`prisma/schema.prisma`](./prisma/schema.prisma).
+Actual schema with types and relations is in `prisma/schema.prisma`.
 
----
+Why a separate history table instead of just a status column - the brief asks for a recorded
+history with timestamp, actor and note for every change, and the admin/resident both need to
+see that as a timeline. Keeping it append-only (nothing in that table ever gets edited or
+deleted) means it also works as a basic audit log, which felt like the right call for
+something residents might refer back to if there's a dispute about when an issue was actually
+fixed.
 
-## 4. API reference
+## API routes
 
-All routes are under `/api`. Auth is via an httpOnly session cookie set on login/register —
-no bearer tokens needed from the client.
+Everything sits under `/api`. No separate token handling on the client - login/register sets
+an httpOnly cookie and every request after that just carries it automatically.
 
-### Auth
-| Method | Route | Body | Notes |
-|---|---|---|---|
-| POST | `/api/auth/register` | `{ name, email, password, flatNumber?, role? }` | `role: "ADMIN"` also requires header `x-admin-invite: <ADMIN_INVITE_CODE>` |
-| POST | `/api/auth/login` | `{ email, password }` | |
-| POST | `/api/auth/logout` | — | Clears the session cookie |
+**Auth**
+- `POST /api/auth/register` - body: `{ name, email, password, flatNumber?, role? }`. If
+  `role` is `"ADMIN"`, you also need the header `x-admin-invite` set to your
+  `ADMIN_INVITE_CODE`, otherwise it silently registers as a resident.
+- `POST /api/auth/login` - body: `{ email, password }`
+- `POST /api/auth/logout`
 
-### Complaints
-| Method | Route | Who | Notes |
-|---|---|---|---|
-| GET | `/api/complaints?status=&category=&from=&to=` | Resident (own only) / Admin (all) | Admin results are sorted overdue-first |
-| POST | `/api/complaints` | Resident | `{ title, category, description, photoUrl? }`. Creates the first history entry (OPEN) automatically |
-| GET | `/api/complaints/:id` | Resident (own) / Admin | Includes full history with actor names |
-| PATCH | `/api/complaints/:id/status` | Admin | `{ status: "IN_PROGRESS"|"RESOLVED", note? }`. Appends a history row, sets `resolvedAt` when resolved, emails the resident |
-| PATCH | `/api/complaints/:id/priority` | Admin | `{ priority: "LOW"|"MEDIUM"|"HIGH" }` |
+**Complaints**
+- `GET /api/complaints` - residents get only their own, admins get everything. Supports
+  `?status=&category=&from=&to=` query params for filtering. For admins the list comes back
+  with overdue complaints sorted to the top.
+- `POST /api/complaints` - resident only. Body: `{ title, category, description, photoUrl? }`.
+  This also creates the first history entry automatically.
+- `GET /api/complaints/:id` - full detail including the history array with who did what and
+  when.
+- `PATCH /api/complaints/:id/status` - admin only. Body: `{ status, note? }`. Adds a history
+  row, closes the complaint if status is RESOLVED, and fires an email to the resident.
+- `PATCH /api/complaints/:id/priority` - admin only. Body: `{ priority }`.
 
-### Notices
-| Method | Route | Who | Notes |
-|---|---|---|---|
-| GET | `/api/notices` | Any logged-in user | Sorted important-first, then newest-first |
-| POST | `/api/notices` | Admin | `{ title, body, important? }`. If `important`, emails every resident |
+**Notices**
+- `GET /api/notices` - pinned/important ones first, then newest first.
+- `POST /api/notices` - admin only. Body: `{ title, body, important? }`. If marked important,
+  every resident gets emailed.
 
-### Dashboard
-| Method | Route | Who | Returns |
-|---|---|---|---|
-| GET | `/api/dashboard` | Admin | `{ total, byStatus, byCategory, byPriority, overdueCount }` |
+**Dashboard**
+- `GET /api/dashboard` - admin only, returns counts by status, category, priority, and how
+  many complaints are currently overdue.
 
-Photos are uploaded as base64 data URLs directly in the complaint's `photoUrl` field (capped at
-~4MB client-side, ~6MB server-side) — no separate file storage service required, which keeps
-the app deployable on Vercel's serverless runtime without extra configuration.
+One implementation note on photos: instead of wiring up S3 or Cloudinary for one photo per
+complaint, the image gets converted to a base64 string in the browser and stored directly in
+the `photoUrl` column. Capped at ~4MB on the client and ~6MB on the server so nobody can blow
+up the database with a huge upload. It's not how you'd do it at real scale, but for a society
+of a few hundred flats it avoids an entire extra service and its credentials.
 
----
+## Deploying
 
-## 5. Deployment
+Covered separately, but in short: push to GitHub, spin up a free Postgres on Neon, import the
+repo into Vercel, add the same env vars from `.env.example` in the Vercel project settings,
+then run `npx prisma db push` once against the production database before you use the app.
 
-See the step-by-step guide you were given alongside this project for pushing to GitHub and
-deploying to Vercel with a free Neon database.
-
----
-
-## 6. Project structure
+## Folder structure
 
 ```
 app/
-  page.tsx                    landing page
-  login/, register/           auth pages
-  resident/dashboard/         resident's complaint list + raise-complaint form
-  resident/complaints/[id]/   complaint detail + history timeline (shared by admin)
-  admin/dashboard/            stats + charts
-  admin/complaints/           filterable complaint table, overdue-first
-  admin/notices/              post notices
-  notices/                    read-only notice board (residents)
-  api/                        all backend route handlers
+  page.tsx                     landing page
+  login/, register/            auth pages
+  resident/dashboard/          resident's complaint list + the raise-complaint form
+  resident/complaints/[id]/    complaint detail + history timeline (admin uses this too)
+  admin/dashboard/             stat cards + charts
+  admin/complaints/            filterable table of every complaint, overdue ones first
+  admin/notices/               posting notices
+  notices/                     read-only notice board for residents
+  api/                         route handlers, one folder per resource
 src/
-  lib/                        db client, auth helpers, mailer, utils
-  components/                 Navbar, badges, StatCard
+  lib/                         prisma client, auth helpers, mailer, small utils
+  components/                  navbar, status/priority badges, stat card
 prisma/
-  schema.prisma                data model
-  seed.js                      demo data
+  schema.prisma                the data model
+  seed.js                      demo admin/resident + sample complaint and notice
+```
 ```
