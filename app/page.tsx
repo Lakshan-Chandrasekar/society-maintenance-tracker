@@ -41,7 +41,7 @@ export default function Home() {
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-ink-600">
             Residents raise issues with a photo and get status updates by email. Admins see what&apos;s overdue,
-            what&apos;s piling up by category, and clear it — with a full history for every complaint.
+            what&apos;s piling up in each category, and every complaint keeps a full history.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/register" className="btn-primary !px-6 !py-3 text-[15px]">
@@ -67,7 +67,7 @@ export default function Home() {
             },
             {
               title: "Notice board & email",
-              body: "Important announcements get pinned, and residents are emailed the moment something changes.",
+              body: "Important announcements get pinned and emailed. Residents also get an email when their complaint status changes.",
               accent: "bg-sage-600",
             },
           ].map((f) => (
@@ -80,7 +80,7 @@ export default function Home() {
         </section>
 
         <footer className="mt-24 border-t border-ink-100 py-8 text-center text-xs text-ink-400">
-          Maple Residency Maintenance Desk — built as a society management demo.
+          Maple Residency Maintenance Desk. A demo project for society maintenance.
         </footer>
       </div>
     </main>

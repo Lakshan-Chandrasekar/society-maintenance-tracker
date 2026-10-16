@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const withOverdue = complaints.map((c) => ({ ...c, overdue: isOverdue(c.createdAt, c.status) }));
 
-  // Overdue-first ordering for the admin view, as required by the brief.
+  // Admins see overdue complaints first (from the brief).
   if (session.role === "ADMIN") {
     withOverdue.sort((a, b) => Number(b.overdue) - Number(a.overdue) || +new Date(b.createdAt) - +new Date(a.createdAt));
   }

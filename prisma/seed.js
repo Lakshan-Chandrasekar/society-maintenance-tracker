@@ -1,5 +1,5 @@
-/* Seeds a demo admin, a demo resident, and a couple of sample complaints/notices.
-   Run with: npm run seed   (after DATABASE_URL is set and `npx prisma db push` has run) */
+/* Adds a demo admin, a demo resident, one sample complaint and one notice.
+   Run with: npm run seed   (after setting DATABASE_URL and running `npx prisma db push`) */
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 

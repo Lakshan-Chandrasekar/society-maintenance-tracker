@@ -80,7 +80,7 @@ export default function AdminNoticesClient() {
             <div key={n.id} className={`card p-5 ${n.important ? "border-clay-300 bg-clay-50/60" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <h3 className="font-display text-base font-semibold text-ink-900">{n.title}</h3>
-                {n.important && <span className="tag shrink-0 bg-clay-500 text-white">📌 Pinned</span>}
+                {n.important && <span className="tag shrink-0 bg-clay-500 text-white">Pinned</span>}
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-700">{n.body}</p>
               <p className="mt-3 text-xs text-ink-400">{formatDate(n.createdAt)}</p>

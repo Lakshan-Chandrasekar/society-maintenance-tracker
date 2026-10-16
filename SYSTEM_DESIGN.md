@@ -1,71 +1,57 @@
-# System Design Write-up — Society Maintenance Tracker
+# System design notes
 
-## Complaint history model
+## Complaint history
 
-Every complaint's lifecycle is modeled as an **append-only log**, not a single mutable status
-field. The `Complaint` table holds the current snapshot (`status`, `priority`, `resolvedAt`)
-for fast reads, while a separate `ComplaintHistory` table stores one row per change: the
-resulting status, an optional note, the actor who made the change, and a timestamp. Raising a
-complaint itself creates the first history row (`OPEN`, actor = the resident), so the audit
-trail is never missing its starting point.
+The `Complaint` table holds the current state of each complaint (`status`, `priority`,
+`resolvedAt`). A separate `ComplaintHistory` table gets one row per change, with the new status,
+an optional note, the user who made the change and a timestamp. Raising a complaint creates the
+first history row (`OPEN`, with the resident as the actor), so every timeline has a starting
+point.
 
-This split exists because the two tables answer different questions. "What's the state of this
-complaint right now, and is it overdue?" is answered from the `Complaint` row alone — a single
-indexed lookup, no joins, which matters for the admin list view rendering hundreds of rows.
-"How did we get here, and who touched it?" is answered by reading `ComplaintHistory` ordered by
-`createdAt`, which is only needed on the detail page. Keeping history append-only (rows are
-never edited or deleted, enforced simply by never exposing an update/delete route for it) means
-the timeline shown to residents and admins is always a faithful, tamper-evident record — useful
-if there's ever a dispute about when something was actually fixed. The trade-off is minor
-denormalization: `status` lives in both tables, but writing both in a single Prisma nested
-`create` keeps them from drifting apart, and reads never need to reconstruct current state by
-scanning history.
+The two tables are read in different places. The complaint lists and the overdue check only
+need the current status, so they read the `Complaint` table and never look at history. The
+detail page reads `ComplaintHistory` ordered by `createdAt` to draw the timeline. There's no API
+route that edits or deletes history rows, so the timeline residents and admins see is a record
+of what actually happened, which helps if there's a dispute about when something was fixed.
+
+This means `status` is stored in two places. When an admin changes the status, the route writes
+the new status and the history row in one Prisma nested write, so the two stay in sync, and the
+app never has to rebuild the current state by replaying history.
 
 ## Overdue detection
 
-Overdue status is **derived, not stored**. On every read, a complaint is flagged overdue if its
-`status` is not `RESOLVED` and `now - createdAt` exceeds a configurable threshold
-(`OVERDUE_THRESHOLD_DAYS`, defaulting to 5). This was chosen over a stored boolean or a cron job
-for a simple reason: "overdue" is a function of the current time, and a stored flag would need a
-background process to keep flipping it as the clock advances, adding an infrastructure
-dependency (a scheduler) for what is really a stateless calculation. Computing it at read time
-means the flag is always correct the instant you load the page, with zero staleness and zero
-moving parts to fail silently.
+Overdue isn't stored anywhere. Each time complaints are read, one is flagged as overdue if its
+status isn't `RESOLVED` and it was created more than `OVERDUE_THRESHOLD_DAYS` days ago (default
+5). A stored flag would need a scheduled job to keep updating it as time passes. Working it out
+on read means the flag is correct whenever the page loads and there's no cron job to maintain.
 
-The cost is repeated computation on every list fetch, but this is negligible — it's a single
-subtraction per row, done in application code after a normal indexed query on `status`. The
-admin complaint list additionally **sorts overdue items first** (computed client-visible via the
-API response before pagination-level concerns arise), so the people who need to act on aging
-complaints see them without hunting through filters. If the society later wants a per-category
-threshold (e.g., electrical issues overdue after 2 days, cosmetic ones after 10), the `Settings`
-table is already scaffolded to hold that without changing the detection logic's shape.
+The cost is one date subtraction per complaint on each request, which is small. For admins, the
+list endpoint sorts overdue complaints to the top after computing the flag, so they don't have
+to filter for them. The `Settings` table exists so that a later admin screen can change the
+threshold from the UI; for now the value comes from the environment variable.
 
-## Photo handling
+## Photos
 
-Complaint photos are accepted as image files client-side, converted to base64 data URLs in the
-browser via `FileReader`, and stored directly on the `Complaint.photoUrl` column as text. This
-is an intentional simplification: it avoids standing up a separate object-storage service
-(S3, Cloudinary, etc.) and its associated credentials, buckets, and signed-URL logic, which
-would be disproportionate infrastructure for a feature that's "attach one photo per complaint."
-Size limits are enforced both client-side (reject over ~4MB before encoding) and server-side
-(reject payloads over ~6MB) so a single upload can't bloat a database row or slow down the list
-API, which deliberately does not select `photoUrl` for list views — only the detail endpoint
-returns it. The clear trade-off is that this doesn't scale to many large images per complaint;
-a production version handling higher volume would move to presigned uploads to blob storage
-and store only a URL, but for one photo per complaint at society scale, inlining it removes a
-whole category of moving infrastructure.
+When a resident attaches a photo, the browser reads it with `FileReader`, turns it into a base64
+data URL and sends it with the complaint. It's stored as text in `Complaint.photoUrl`. I went
+this way to avoid setting up object storage (S3, Cloudinary and so on) with buckets, credentials
+and signed URLs for a feature that is one photo per complaint.
 
-## Notification flow
+The client rejects images over about 4MB before encoding them, and the server rejects photo
+payloads over about 6MB. This won't hold up with many large images. A bigger deployment should
+upload to blob storage with presigned URLs and keep only the URL in the database. For one photo
+per complaint in a single society, it's enough.
 
-Two events trigger email: a complaint's status changing, and a notice being posted as
-"important." Both go through a single `sendMail` helper wrapping Nodemailer over SMTP, chosen
-over a third-party email API so the project runs on any free SMTP credential (including a
-Gmail App Password) without a paid account. Sending is **best-effort and non-blocking** — the
-HTTP response to the admin's status-change or notice-post action returns immediately, and the
-email call is fired with `.catch(() => {})` so a slow or failing mail server never turns into a
-failed status update. For important notices, which can fan out to every resident, emails are
-sent with `Promise.allSettled` so one bad address doesn't stop the rest from going out. This
-favors availability of the core workflow (the status change *did* happen, is recorded in
-history, and is visible in-app) over guaranteed delivery of the notification about it — the
-right trade-off for a maintenance desk where the system-of-record status is more important than
-the email being real-time.
+## Notifications
+
+Two events send email: a complaint's status changing, and an admin posting a notice marked as
+important. Both use one `sendMail` helper built on Nodemailer over SMTP. I picked SMTP over a
+hosted email API so the project runs on any free SMTP account, including Gmail with an App
+Password.
+
+Email is sent in the background. The status update and notice routes don't wait for the mail
+call, and its errors are caught (`.catch(() => {})`), so a slow or broken mail server can't make
+a status update fail. Important notices go to every resident, so those emails are sent with
+`Promise.allSettled`; one bad address doesn't stop the others. The trade-off is that an email
+can fail without anyone noticing. I accepted that because the status change itself is saved in
+the database and shown in the app either way.

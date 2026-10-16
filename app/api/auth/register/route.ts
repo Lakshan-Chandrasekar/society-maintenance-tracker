@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
     }
 
-    // Only allow ADMIN signup when an explicit invite code matches — keeps the
-    // admin role from being self-assigned by anyone filling the public form.
+    // Admin signup needs the invite code in the header, otherwise anyone could
+    // pick ADMIN on the public form.
     const requestedRole = role === "ADMIN" && req.headers.get("x-admin-invite") === process.env.ADMIN_INVITE_CODE
       ? "ADMIN"
       : "RESIDENT";

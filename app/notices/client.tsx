@@ -43,7 +43,7 @@ export default function NoticeBoardClient() {
                 <h3 className="font-display text-base font-semibold text-ink-900">{n.title}</h3>
                 {n.important && (
                   <span className="tag shrink-0 bg-clay-500 text-white">
-                    📌 Pinned
+                    Pinned
                   </span>
                 )}
               </div>

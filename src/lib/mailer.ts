@@ -22,11 +22,8 @@ function getTransporter() {
   return transporter;
 }
 
-/**
- * Sends an email if SMTP is configured. If it isn't (e.g. local dev without
- * credentials), this quietly logs to the console instead of throwing, so a
- * missing mail setup never breaks the complaint/notice flow.
- */
+// Sends the email if SMTP is set up. Without SMTP (e.g. local dev) it just logs
+// to the console, so the complaint and notice flows still work.
 export async function sendMail(to: string, subject: string, html: string) {
   const t = getTransporter();
   const from = process.env.SMTP_FROM || "Society Desk <no-reply@society.local>";
@@ -58,7 +55,7 @@ export function statusChangeEmail(residentName: string, complaintTitle: string, 
       <p>Your complaint <strong>${complaintTitle}</strong> has been updated to
       <strong>${friendly[status] || status}</strong>.</p>
       ${note ? `<p style="background:#f4f6f8;padding:10px 14px;border-left:3px solid #c96a2c;">${note}</p>` : ""}
-      <p style="color:#566380;font-size:13px;">— Society Maintenance Desk</p>
+      <p style="color:#566380;font-size:13px;">Society Maintenance Desk</p>
     </div>
   `;
 }
@@ -66,11 +63,11 @@ export function statusChangeEmail(residentName: string, complaintTitle: string, 
 export function importantNoticeEmail(residentName: string, title: string, body: string) {
   return `
     <div style="font-family: Georgia, serif; max-width: 480px; margin: auto; color: #1f2740;">
-      <h2 style="color:#a95121;">📌 Important notice</h2>
+      <h2 style="color:#a95121;">Important notice</h2>
       <p>Hi ${residentName},</p>
       <h3>${title}</h3>
       <p>${body}</p>
-      <p style="color:#566380;font-size:13px;">— Society Maintenance Desk</p>
+      <p style="color:#566380;font-size:13px;">Society Maintenance Desk</p>
     </div>
   `;
 }

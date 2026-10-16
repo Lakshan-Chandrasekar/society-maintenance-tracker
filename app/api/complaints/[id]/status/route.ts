@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     include: { history: { orderBy: { createdAt: "asc" } }, resident: true },
   });
 
-  // Best-effort notification; a mail failure should never block the status change.
+  // Don't wait for the email. If it fails, the status change still goes through.
   sendMail(
     complaint.resident.email,
     `Update on your complaint: ${complaint.title}`,

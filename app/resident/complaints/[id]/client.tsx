@@ -185,7 +185,7 @@ export default function ComplaintDetailClient({ id, isAdmin }: { id: string; isA
               </div>
               <p className="mt-1 text-sm text-ink-600">
                 {h.actor.name} {h.actor.role === "ADMIN" ? "(admin)" : ""}
-                {h.note ? ` — ${h.note}` : ""}
+                {h.note ? `: ${h.note}` : ""}
               </p>
             </li>
           ))}

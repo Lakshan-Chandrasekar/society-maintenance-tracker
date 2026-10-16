@@ -32,7 +32,7 @@ export function verifySessionToken(token: string): SessionPayload | null {
   }
 }
 
-// Reads the session from the cookie store on the server (server components / route handlers).
+// Server-side only (server components and route handlers).
 export function getSession(): SessionPayload | null {
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (!token) return null;

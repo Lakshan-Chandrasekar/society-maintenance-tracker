@@ -33,9 +33,9 @@ export async function POST(req: NextRequest) {
 
   if (notice.important) {
     const residents = await prisma.user.findMany({ where: { role: "RESIDENT" }, select: { name: true, email: true } });
-    // Fire-and-forget so posting the notice doesn't wait on every resident's email.
+    // Not awaited, so posting the notice doesn't wait for every email to go out.
     Promise.allSettled(
-      residents.map((r) => sendMail(r.email, `📌 Important notice: ${title}`, importantNoticeEmail(r.name, title, body)))
+      residents.map((r) => sendMail(r.email, `Important notice: ${title}`, importantNoticeEmail(r.name, title, body)))
     ).catch(() => {});
   }
 
