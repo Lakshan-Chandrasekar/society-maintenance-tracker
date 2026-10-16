@@ -45,9 +45,8 @@ per complaint in a single society, it's enough.
 ## Notifications
 
 Two events send email: a complaint's status changing, and an admin posting a notice marked as
-important. Both use one `sendMail` helper built on Nodemailer over SMTP. I picked SMTP over a
-hosted email API so the project runs on any free SMTP account, including Gmail with an App
-Password.
+important. Both use one `sendMail` helper built on Nodemailer over SMTP, so it works with any
+SMTP provider.
 
 Email is sent in the background. The status update and notice routes don't wait for the mail
 call, and its errors are caught (`.catch(() => {})`), so a slow or broken mail server can't make
